@@ -6,7 +6,15 @@ edition = "2021"
 [dependencies]
 anyhow.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
+futures.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 clap.workspace = true
 dotenv.workspace = true
+
+ratatui.workspace = true
+crossterm.workspace = true
+tui-term.workspace = true
+vt100.workspace = true
+portable-pty.workspace = true

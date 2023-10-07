@@ -7,7 +7,14 @@ rev = { path = "crates/rev" }
 
 anyhow = { version = "1.0.71" }
 tokio = { version = "1", features = ["full"] }
+tokio-util = {version = "0.7.9"}
+futures = {version = "0.3.28"}
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3.17" }
 clap = { version = "4.3.4", features = ["derive", "env"] }
 dotenv = { version = "0.15.0" }
+ratatui = {version = "0.23.0"}
+crossterm = {version = "0.27.0", features = ["event-stream"]}
+tui-term = {version = "0.1.4"}
+vt100 = {version = "0.15.2"}
+portable-pty = {version = "0.8.1"}

@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use app::App;
 use clap::{Parser, Subcommand};
 
@@ -16,10 +14,93 @@ enum Commands {
     Review,
 }
 
+mod logging {
+    use std::path::PathBuf;
+
+    use directories::ProjectDirs;
+    use tracing_error::ErrorLayer;
+    use tracing_subscriber::{
+        prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, Layer,
+    };
+
+    pub fn initialize_logging() -> anyhow::Result<()> {
+        let project = match ProjectDirs::from("com", "kjuulh", env!("CARGO_PKG_NAME")) {
+            Some(p) => p.data_local_dir().to_path_buf(),
+            None => PathBuf::from(".").join(".data"),
+        };
+
+        std::fs::create_dir_all(&project)?;
+        let log_path = project.join("rev.log");
+
+        println!("logging to: {}", log_path.display());
+
+        let log_file = std::fs::File::create(log_path)?;
+        std::env::set_var(
+            "RUST_LOG",
+            std::env::var("RUST_LOG")
+                .or_else(|_| std::env::var("REV_LOG_LEVEL"))
+                .unwrap_or_else(|_| format!("{}=info", env!("CARGO_CRATE_NAME"))),
+        );
+        let file_subscriber = tracing_subscriber::fmt::layer()
+            .with_file(true)
+            .with_line_number(true)
+            .with_writer(log_file)
+            .with_target(false)
+            .with_ansi(false)
+            .with_filter(tracing_subscriber::filter::EnvFilter::from_default_env());
+        tracing_subscriber::registry()
+            .with(file_subscriber)
+            .with(ErrorLayer::default())
+            .init();
+        Ok(())
+    }
+
+    pub fn initialize_panic_handler() -> anyhow::Result<()> {
+        std::panic::set_hook(Box::new(move |panic_info| {
+            if let Ok(mut t) = crate::tui::Tui::new() {
+                if let Err(r) = t.exit() {
+                    tracing::error!("Unable to exit Terminal: {:?}", r);
+                }
+            }
+
+            #[cfg(not(debug_assertions))]
+            {
+                use human_panic::{handle_dump, print_msg, Metadata};
+                let meta = Metadata {
+                    version: env!("CARGO_PKG_VERSION").into(),
+                    name: env!("CARGO_PKG_NAME").into(),
+                    authors: env!("CARGO_PKG_AUTHORS").replace(':', ", ").into(),
+                    homepage: env!("CARGO_PKG_HOMEPAGE").into(),
+                };
+
+                let file_path = handle_dump(&meta, panic_info);
+                // prints human-panic message
+                print_msg(file_path, &meta)
+                    .expect("human-panic: printing error message to console failed");
+                eprintln!("{}", panic_hook.panic_report(panic_info)); // prints color-eyre stack trace to stderr
+            }
+            let msg = format!("{}", panic_info);
+            tracing::error!("Error: {}", msg);
+
+            // #[cfg(debug_assertions)]
+            // {
+            //     // Better Panic stacktrace that is only enabled when debugging.
+            //     better_panic::Settings::auto()
+            //         .most_recent_first(false)
+            //         .lineno_suffix(true)
+            //         .verbosity(better_panic::Verbosity::Full)
+            //         .create_panic_handler()(panic_info);
+            // }
+        }));
+        Ok(())
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
-    tracing_subscriber::fmt::init();
+    logging::initialize_logging()?;
+    logging::initialize_panic_handler()?;
 
     let cli = Command::parse();
 
@@ -29,7 +110,18 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Review => {
             tracing::info!("starting tui");
-            App::default().register_components().await?.run().await?;
+            match App::default().register_components().await {
+                Ok(a) => {
+                    if let Err(e) = a.run().await {
+                        tracing::error!("{}", e);
+                        return Err(e);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("{}", e);
+                    return Err(e);
+                }
+            }
             tracing::info!("stopping tui");
         }
     }
@@ -49,13 +141,14 @@ mod tui {
         terminal::{EnterAlternateScreen, LeaveAlternateScreen},
     };
     use futures::{FutureExt, StreamExt};
-    use ratatui::prelude::{CrosstermBackend, Rect};
+    use ratatui::prelude::CrosstermBackend;
     use tokio::{
         sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
         task::JoinHandle,
     };
     use tokio_util::sync::CancellationToken;
 
+    #[allow(dead_code)]
     #[derive(Clone, Debug)]
     pub enum Event {
         Init,
@@ -114,6 +207,7 @@ mod tui {
             self
         }
 
+        #[allow(dead_code)]
         pub fn mouse(mut self, mouse: bool) -> Self {
             self.mouse = mouse;
             self
@@ -178,7 +272,7 @@ mod tui {
                                         crossterm::event::Event::Resize(x, y) => { event_tx.send(Event::Resize(x, y)).expect("to send event"); },
                                     }
                                 },
-                                Some(Err(_)) => {
+                                Some(Err(e)) => {
                                     event_tx.send(Event::Error).expect("to send error event");
                                 }
                                 None => {},
@@ -253,6 +347,7 @@ mod tui {
 }
 
 mod action {
+    #[allow(dead_code)]
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum Action {
         Tick,
@@ -339,7 +434,7 @@ mod app {
 
     use crate::{
         action::Action,
-        components::{home::Home, Component},
+        components::{diff::GitDiff, home::Home, Component},
         config::Config,
         tui,
     };
@@ -364,7 +459,8 @@ mod app {
         }
 
         pub async fn register_components(&mut self) -> anyhow::Result<&mut Self> {
-            self.components.push(Box::new(Home::new()));
+            //self.components.push(Box::new(Home::new()));
+            self.components.push(Box::new(GitDiff::new()));
 
             Ok(self)
         }
@@ -378,12 +474,12 @@ mod app {
             tui.enter()?;
 
             for component in self.components.iter_mut() {
-                component.register_action_handler(action_tx.clone());
-                component.register_config_handler(self.config.clone());
+                component.register_action_handler(action_tx.clone())?;
+                component.register_config_handler(self.config.clone())?;
             }
 
             for component in self.components.iter_mut() {
-                component.init(tui.size()?)?;
+                component.init()?;
             }
 
             loop {
@@ -444,6 +540,12 @@ mod app {
                         }
                         _ => {}
                     }
+
+                    for component in self.components.iter_mut() {
+                        if let Some(action) = component.update(action.clone())? {
+                            action_tx.send(action)?;
+                        }
+                    }
                 }
 
                 if self.should_quit {
@@ -460,7 +562,7 @@ mod app {
 
     impl Default for App {
         fn default() -> Self {
-            Self::new(1.0, 4.0)
+            Self::new(10.0, 64.0)
         }
     }
 }
@@ -486,7 +588,7 @@ mod components {
             Ok(())
         }
 
-        fn init(&mut self, area: Rect) -> anyhow::Result<()> {
+        fn init(&mut self) -> anyhow::Result<()> {
             Ok(())
         }
 
@@ -516,7 +618,10 @@ mod components {
     }
 
     pub mod home {
-        use ratatui::widgets::Paragraph;
+        use ratatui::{
+            prelude::{Constraint, Layout},
+            widgets::Paragraph,
+        };
 
         use super::Component;
 
@@ -534,7 +639,138 @@ mod components {
                 f: &mut crate::tui::Frame<'_>,
                 area: ratatui::prelude::Rect,
             ) -> anyhow::Result<()> {
-                f.render_widget(Paragraph::new("hello world"), area);
+                let rects = Layout::default()
+                    .constraints([Constraint::Percentage(100), Constraint::Min(3)].as_ref())
+                    .split(area);
+
+                f.render_widget(Paragraph::new("hello world one"), rects[0]);
+                f.render_widget(Paragraph::new("hello world two"), rects[1]);
+                Ok(())
+            }
+        }
+    }
+
+    pub mod diff {
+        use std::sync::{Arc, RwLock};
+
+        use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
+        use ratatui::{
+            style::{Modifier, Style},
+            text::Line,
+            widgets::{Block, Borders},
+        };
+        use tui_term::widget::PseudoTerminal;
+
+        use super::Component;
+
+        pub struct GitDiff {
+            cmd: CommandBuilder,
+            pty_system: NativePtySystem,
+            parser: Option<Arc<RwLock<vt100::Parser>>>,
+            scrollback: u64,
+        }
+
+        impl GitDiff {
+            pub fn new() -> Self {
+                let pty_system = NativePtySystem::default();
+                let cwd = std::env::current_dir().unwrap();
+                let mut cmd = CommandBuilder::new("bash");
+                cmd.arg("-c");
+                cmd.arg("git --no-pager diff | delta --paging=never");
+                cmd.cwd(cwd);
+
+                Self {
+                    cmd,
+                    pty_system,
+                    parser: None,
+                    scrollback: 0,
+                }
+            }
+        }
+
+        impl Component for GitDiff {
+            fn update(
+                &mut self,
+                action: crate::action::Action,
+            ) -> anyhow::Result<Option<crate::action::Action>> {
+                match action {
+                    crate::action::Action::Tick => {
+                        tracing::info!("tickle me");
+
+                        if let Some(parser) = self.parser.clone() {
+                            let mut parser = parser.write().unwrap();
+                            self.scrollback += 1;
+                            //self.scrollback = self.scrollback % 999;
+                            parser.set_scrollback(self.scrollback as usize);
+                        }
+                    }
+                    _ => {}
+                }
+
+                Ok(None)
+            }
+
+            fn draw(
+                &mut self,
+                f: &mut crate::tui::Frame<'_>,
+                area: ratatui::prelude::Rect,
+            ) -> anyhow::Result<()> {
+                match self.parser.as_ref() {
+                    Some(parser) => {
+                        let screen = parser.read().unwrap();
+                        let screen = screen.screen();
+
+                        let block = Block::default()
+                            .borders(Borders::ALL)
+                            .title(Line::from("[ Running: git diff ]"))
+                            .style(Style::default().add_modifier(Modifier::BOLD));
+                        let pseudo_term = PseudoTerminal::new(screen).block(block.clone());
+                        f.render_widget(pseudo_term, area);
+                        f.render_widget(block, f.size())
+                    }
+                    None => {
+                        let pair = self.pty_system.openpty(PtySize {
+                            rows: area.height,
+                            cols: area.width,
+                            pixel_width: 0,
+                            pixel_height: 0,
+                        })?;
+
+                        let mut child = pair.slave.spawn_command(self.cmd.clone())?;
+                        drop(pair.slave);
+
+                        let mut reader = pair.master.try_clone_reader()?;
+                        let parser = Arc::new(RwLock::new(vt100::Parser::new(
+                            area.height - 1,
+                            area.width - 1,
+                            1000,
+                        )));
+
+                        {
+                            let parser = parser.clone();
+                            std::thread::spawn(move || {
+                                let mut s = String::new();
+                                reader.read_to_string(&mut s).unwrap();
+                                if !s.is_empty() {
+                                    let mut parser = parser.write().unwrap();
+                                    parser.process(s.as_bytes());
+                                }
+                            });
+                        }
+
+                        {
+                            let _writer = pair.master.take_writer()?;
+                        }
+
+                        let _child_exit_status = child.wait()?;
+
+                        drop(pair.master);
+
+                        self.parser = Some(parser);
+
+                        return self.draw(f, area);
+                    }
+                }
                 Ok(())
             }
         }

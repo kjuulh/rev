@@ -9,9 +9,11 @@ tokio.workspace = true
 tokio-util.workspace = true
 futures.workspace = true
 tracing.workspace = true
+tracing-error.workspace = true
 tracing-subscriber.workspace = true
 clap.workspace = true
 dotenv.workspace = true
+directories.workspace = true
 
 ratatui.workspace = true
 crossterm.workspace = true

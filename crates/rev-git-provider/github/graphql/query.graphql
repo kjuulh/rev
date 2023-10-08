@@ -1,0 +1,17 @@
+query UserRepositories($owner: String!) {
+  user(login: $owner) {
+    pullRequests(first: 100, states: OPEN) {
+      nodes {
+        id
+        repository {
+          owner {
+            id
+            login
+            __typename
+          }
+        }
+        title
+      }
+    }
+  }
+}

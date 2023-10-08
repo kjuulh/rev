@@ -1,11 +1,13 @@
 [workspace]
-members = ["crates/rev"]
+members = ["crates/*"]
 resolver = "2"
 
 [workspace.dependencies]
 rev = { path = "crates/rev" }
+rev-git-provider = { path = "crates/rev-git-provider" }
 
 anyhow = { version = "1.0.71" }
+async-trait = {version = "0.1.73"}
 tokio = { version = "1", features = ["full"] }
 tokio-util = {version = "0.7.9"}
 futures = {version = "0.3.28"}
@@ -20,3 +22,10 @@ tui-term = {version = "0.1.4"}
 vt100 = {version = "0.15.2"}
 portable-pty = {version = "0.8.1"}
 directories = {version = "5.0.1"}
+octocrab = {version = "0.31.1"}
+http = {version = "0.2.9"}
+serde_json = {version = "1"}
+serde = {version = "1", features = ["derive"]}
+graphql_client = {version = "0.13.0"}
+reqwest = {version = "0.11.22", features = ["json"]}
+

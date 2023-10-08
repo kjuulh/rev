@@ -1,0 +1,3 @@
+{
+    "schema": "./crates/rev-git-provider/github/graphql/schema.graphql"
+}

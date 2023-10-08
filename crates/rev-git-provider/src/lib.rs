@@ -158,8 +158,8 @@ pub mod github {
                 .iter()
                 .flat_map(|d| d.user.as_ref())
                 .flat_map(|u| u.pull_requests.nodes.as_ref())
-                .flat_map(|n| n)
-                .flat_map(|n| n)
+                .flatten()
+                .flatten()
                 .map(|u| (u, &u.repository.owner.login))
                 .collect::<Vec<_>>();
 

@@ -1,5 +1,3 @@
-use std::sync::{Arc, Mutex};
-
 use ratatui::prelude::Rect;
 use tokio::sync::mpsc;
 
@@ -7,67 +5,17 @@ use crate::{
     action::Action,
     components::{diff::GitDiff, home::Home},
     config::Config,
+    page::Page,
     tui,
 };
-
-use self::page::{Page, Pages};
-
-mod page {
-    use crate::{components::Component, tui::Frame};
-
-    pub enum Pages {
-        Home(Page),
-        Diff(Page),
-    }
-
-    pub struct Page {
-        pub name: String,
-        pub components: Vec<Box<dyn Component>>,
-    }
-
-    impl Pages {
-        pub fn apply(
-            &mut self,
-            apply_fn: impl Fn(&mut Box<dyn Component>) -> anyhow::Result<()>,
-        ) -> anyhow::Result<()> {
-            let page = match self {
-                Pages::Home(page) => Some(page),
-                Pages::Diff(page) => Some(page),
-            };
-
-            if let Some(page) = page {
-                for c in page.components.iter_mut() {
-                    apply_fn(c)?;
-                }
-            }
-
-            Ok(())
-        }
-
-        pub fn draw(&mut self, frame: &mut Frame<'_>) -> anyhow::Result<()> {
-            let page = match self {
-                Pages::Home(p) => Some(p),
-                Pages::Diff(p) => Some(p),
-            };
-
-            if let Some(page) = page {
-                for c in page.components.iter_mut() {
-                    c.draw(frame, frame.size())?;
-                }
-            }
-
-            Ok(())
-        }
-    }
-}
 
 pub struct App {
     config: Config,
     tick_rate: f64,
     frame_rate: f64,
     should_quit: bool,
-    pages: Vec<Arc<Mutex<Pages>>>,
-    current_page: Option<Arc<Mutex<Pages>>>,
+    pages: Vec<Page>,
+    current_page: Option<String>,
 }
 
 impl App {
@@ -82,18 +30,22 @@ impl App {
         }
     }
 
-    pub async fn register_pages(&mut self) -> anyhow::Result<&mut Self> {
-        let home = Arc::new(Mutex::new(Pages::Home(Page {
-            name: "home".into(),
-            components: vec![Box::new(Home::new())],
-        })));
+    fn get_current_page(&mut self) -> Option<&mut Page> {
+        if let Some(page) = self.current_page.as_ref() {
+            return self.pages.iter_mut().find(|p| p.name() == page);
+        }
 
-        self.pages.push(home.clone());
-        self.pages.push(Arc::new(Mutex::new(Pages::Diff(Page {
-            name: "diff".into(),
-            components: vec![Box::new(GitDiff::new())],
-        }))));
-        self.current_page = Some(home.clone());
+        None
+    }
+
+    pub async fn register_pages(&mut self) -> anyhow::Result<&mut Self> {
+        self.pages
+            .push(Page::new("home", vec![Box::new(Home::new())]));
+        self.pages
+            .push(Page::new("diff", vec![Box::new(GitDiff::new())]));
+
+        //self.current_page = Some(home.clone());
+        self.current_page = Some("home".into());
 
         Ok(self)
     }
@@ -107,7 +59,6 @@ impl App {
         tui.enter()?;
 
         for page in self.pages.iter_mut() {
-            let mut page = page.lock().unwrap();
             page.apply(|c| {
                 c.register_action_handler(action_tx.clone())?;
                 c.register_config_handler(self.config.clone())
@@ -115,7 +66,6 @@ impl App {
         }
 
         for page in self.pages.iter_mut() {
-            let mut page = page.lock().unwrap();
             page.apply(|c| c.init())?;
         }
 
@@ -135,7 +85,6 @@ impl App {
                     _ => {}
                 }
                 for page in self.pages.iter_mut() {
-                    let mut page = page.lock().unwrap();
                     page.apply(|c| {
                         if let Some(action) = c.handle_events(Some(e.clone()))? {
                             action_tx.send(action)?;
@@ -155,8 +104,7 @@ impl App {
                     Action::Resize(x, y) => {
                         tui.resize(Rect::new(0, 0, x, y))?;
                         tui.draw(|f| {
-                            if let Some(page) = self.current_page.clone() {
-                                let mut page = page.lock().unwrap();
+                            if let Some(page) = self.get_current_page() {
                                 if let Err(e) = page.draw(f) {
                                     action_tx
                                         .send(Action::Error(format!("failed to draw {:?}", e)))
@@ -170,8 +118,7 @@ impl App {
                     Action::Quit => self.should_quit = true,
                     Action::Render => {
                         tui.draw(|f| {
-                            if let Some(page) = self.current_page.clone() {
-                                let mut page = page.lock().unwrap();
+                            if let Some(page) = self.get_current_page() {
                                 if let Err(e) = page.draw(f) {
                                     action_tx
                                         .send(Action::Error(format!("failed to draw {:?}", e)))
@@ -183,8 +130,7 @@ impl App {
                     _ => {}
                 }
 
-                if let Some(page) = self.current_page.clone() {
-                    let mut page = page.lock().unwrap();
+                if let Some(page) = self.get_current_page() {
                     page.apply(|c| {
                         if let Some(action) = c.update(action.clone())? {
                             action_tx.send(action)?;

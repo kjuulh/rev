@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
@@ -10,4 +12,5 @@ pub enum Action {
     Refresh,
     Error(String),
     Help,
+    GotoPage(String),
 }

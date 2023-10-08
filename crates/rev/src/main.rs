@@ -20,6 +20,7 @@ mod cli;
 mod components;
 mod config;
 mod logging;
+mod page;
 mod tui;
 
 #[tokio::main]

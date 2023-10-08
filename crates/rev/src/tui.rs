@@ -140,7 +140,7 @@ impl Tui {
                                     crossterm::event::Event::Resize(x, y) => { event_tx.send(Event::Resize(x, y)).expect("to send event"); },
                                 }
                             },
-                            Some(Err(e)) => {
+                            Some(Err(_e)) => {
                                 event_tx.send(Event::Error).expect("to send error event");
                             }
                             None => {},

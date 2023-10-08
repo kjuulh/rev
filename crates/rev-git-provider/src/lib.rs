@@ -71,7 +71,6 @@ pub mod github {
     }
 
     pub struct Github {
-        github: octocrab::Octocrab,
         client: reqwest::Client,
     }
 
@@ -89,11 +88,6 @@ pub mod github {
 
     impl Github {
         pub fn new(options: GithubOptions) -> anyhow::Result<Self> {
-            let octo = octocrab::Octocrab::builder()
-                .base_uri(options.uri)?
-                .add_header(http::header::ACCEPT, "application/json".into())
-                .build()?;
-
             let client = Client::builder()
                 .user_agent("graphql-rust/0.10.0")
                 .default_headers(
@@ -109,10 +103,7 @@ pub mod github {
                 )
                 .build()?;
 
-            Ok(Self {
-                github: octo,
-                client,
-            })
+            Ok(Self { client })
         }
     }
 
@@ -136,7 +127,11 @@ pub mod github {
 
     #[async_trait]
     impl GitUserReview for Github {
-        async fn get_user_reviews(&self, user: &str, tags: &[&str]) -> anyhow::Result<Vec<String>> {
+        async fn get_user_reviews(
+            &self,
+            user: &str,
+            _tags: &[&str],
+        ) -> anyhow::Result<Vec<String>> {
             let vars = user_repositories::Variables { owner: user.into() };
             let query = UserRepositories::build_query(vars);
 
@@ -169,7 +164,7 @@ pub mod github {
 
     #[async_trait]
     impl GitReview for Github {
-        async fn get_review(&self, lookup: String) -> anyhow::Result<Review> {
+        async fn get_review(&self, _lookup: String) -> anyhow::Result<Review> {
             todo!()
         }
     }

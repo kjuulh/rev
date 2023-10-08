@@ -1,4 +1,4 @@
-use app::App;
+
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]

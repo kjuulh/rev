@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use ratatui::prelude::Rect;
 use tokio::sync::mpsc;
 
@@ -8,12 +10,61 @@ use crate::{
     tui,
 };
 
+use self::page::{Page, Pages};
+
+mod page {
+    use crate::{components::Component, tui::Frame};
+
+    pub enum Pages {
+        Home(Page),
+    }
+
+    pub struct Page {
+        pub name: String,
+        pub components: Vec<Box<dyn Component>>,
+    }
+
+    impl Pages {
+        pub fn apply(
+            &mut self,
+            apply_fn: impl Fn(&mut Box<dyn Component>) -> anyhow::Result<()>,
+        ) -> anyhow::Result<()> {
+            let page = match self {
+                Pages::Home(page) => Some(page),
+            };
+
+            if let Some(page) = page {
+                for c in page.components.iter_mut() {
+                    apply_fn(c)?;
+                }
+            }
+
+            Ok(())
+        }
+
+        pub fn draw(&mut self, frame: &mut Frame<'_>) -> anyhow::Result<()> {
+            let page = match self {
+                Pages::Home(p) => Some(p),
+            };
+
+            if let Some(page) = page {
+                for c in page.components.iter_mut() {
+                    c.draw(frame, frame.size())?;
+                }
+            }
+
+            Ok(())
+        }
+    }
+}
+
 pub struct App {
     config: Config,
     tick_rate: f64,
     frame_rate: f64,
     should_quit: bool,
-    components: Vec<Box<dyn Component>>,
+    pages: Vec<Arc<Mutex<Pages>>>,
+    current_page: Option<Arc<Mutex<Pages>>>,
 }
 
 impl App {
@@ -23,13 +74,19 @@ impl App {
             frame_rate,
             config: Config::default(),
             should_quit: false,
-            components: Vec::new(),
+            pages: Vec::new(),
+            current_page: None,
         }
     }
 
-    pub async fn register_components(&mut self) -> anyhow::Result<&mut Self> {
-        //self.components.push(Box::new(Home::new()));
-        self.components.push(Box::new(GitDiff::new()));
+    pub async fn register_pages(&mut self) -> anyhow::Result<&mut Self> {
+        let home = Arc::new(Mutex::new(Pages::Home(Page {
+            name: "home".into(),
+            components: vec![Box::new(Home::new())],
+        })));
+
+        self.pages.push(home.clone());
+        self.current_page = Some(home.clone());
 
         Ok(self)
     }
@@ -42,13 +99,17 @@ impl App {
             .frame_rate(self.frame_rate);
         tui.enter()?;
 
-        for component in self.components.iter_mut() {
-            component.register_action_handler(action_tx.clone())?;
-            component.register_config_handler(self.config.clone())?;
+        for page in self.pages.iter_mut() {
+            let mut page = page.lock().unwrap();
+            page.apply(|mut c| {
+                c.register_action_handler(action_tx.clone())?;
+                c.register_config_handler(self.config.clone())
+            })?;
         }
 
-        for component in self.components.iter_mut() {
-            component.init()?;
+        for page in self.pages.iter_mut() {
+            let mut page = page.lock().unwrap();
+            page.apply(|mut c| c.init())?;
         }
 
         loop {
@@ -66,10 +127,15 @@ impl App {
                     tui::Event::Render => action_tx.send(Action::Render)?,
                     _ => {}
                 }
-                for component in self.components.iter_mut() {
-                    if let Some(action) = component.handle_events(Some(e.clone()))? {
-                        action_tx.send(action)?;
-                    }
+                for page in self.pages.iter_mut() {
+                    let mut page = page.lock().unwrap();
+                    page.apply(|mut c| {
+                        if let Some(action) = c.handle_events(Some(e.clone()))? {
+                            action_tx.send(action)?;
+                        }
+
+                        Ok(())
+                    })?;
                 }
             }
 
@@ -82,12 +148,12 @@ impl App {
                     Action::Resize(x, y) => {
                         tui.resize(Rect::new(0, 0, x, y))?;
                         tui.draw(|f| {
-                            for component in self.components.iter_mut() {
-                                let r = component.draw(f, f.size());
-                                if let Err(e) = r {
+                            if let Some(mut page) = self.current_page.clone() {
+                                let mut page = page.lock().unwrap();
+                                if let Err(e) = page.draw(f) {
                                     action_tx
                                         .send(Action::Error(format!("failed to draw {:?}", e)))
-                                        .expect("failed to send error event");
+                                        .expect("to send error message");
                                 }
                             }
                         })?;
@@ -97,12 +163,12 @@ impl App {
                     Action::Quit => self.should_quit = true,
                     Action::Render => {
                         tui.draw(|f| {
-                            for component in self.components.iter_mut() {
-                                let r = component.draw(f, f.size());
-                                if let Err(e) = r {
+                            if let Some(mut page) = self.current_page.clone() {
+                                let mut page = page.lock().unwrap();
+                                if let Err(e) = page.draw(f) {
                                     action_tx
                                         .send(Action::Error(format!("failed to draw {:?}", e)))
-                                        .expect("failed to send error event");
+                                        .expect("to send error message");
                                 }
                             }
                         })?;
@@ -110,10 +176,15 @@ impl App {
                     _ => {}
                 }
 
-                for component in self.components.iter_mut() {
-                    if let Some(action) = component.update(action.clone())? {
-                        action_tx.send(action)?;
-                    }
+                if let Some(mut page) = self.current_page.clone() {
+                    let mut page = page.lock().unwrap();
+                    page.apply(|mut c| {
+                        if let Some(action) = c.update(action.clone())? {
+                            action_tx.send(action)?;
+                        }
+
+                        Ok(())
+                    })?;
                 }
             }
 

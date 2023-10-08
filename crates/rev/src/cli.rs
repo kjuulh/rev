@@ -11,7 +11,7 @@ pub async fn run() -> anyhow::Result<()> {
         }
         Commands::Review => {
             tracing::info!("starting tui");
-            match App::default().register_components().await {
+            match App::default().register_pages().await {
                 Ok(a) => {
                     if let Err(e) = a.run().await {
                         tracing::error!("{}", e);

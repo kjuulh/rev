@@ -1,6 +1,11 @@
-query UserRepositories($owner: String!) {
+query UserRepositories($owner: String!, $labels: [String!]) {
   user(login: $owner) {
-    pullRequests(first: 100, states: OPEN) {
+    pullRequests(
+      first: 20
+      states: OPEN
+      orderBy: { field: CREATED_AT, direction: DESC }
+      labels: $labels
+    ) {
       nodes {
         id
         repository {
@@ -11,6 +16,11 @@ query UserRepositories($owner: String!) {
           }
         }
         title
+        createdAt
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
       }
     }
   }

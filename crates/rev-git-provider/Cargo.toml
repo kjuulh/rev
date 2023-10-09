@@ -15,4 +15,8 @@ http.workspace = true
 graphql_client.workspace = true
 serde.workspace = true
 reqwest.workspace = true
+which.workspace = true
+chrono.workspace = true
 
+[dev-dependencies]
+tracing-test.workspace = true

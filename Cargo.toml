@@ -27,4 +27,6 @@ serde_json = {version = "1"}
 serde = {version = "1", features = ["derive"]}
 graphql_client = {version = "0.13.0"}
 reqwest = {version = "0.11.22", features = ["json"]}
-
+which = {version = "4.4.2"}
+tracing-test = {version = "0.2.4"}
+chrono = {version = "0.4.31", features = ["serde"]}

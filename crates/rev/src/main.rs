@@ -1,4 +1,3 @@
-
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -22,6 +21,8 @@ mod config;
 mod logging;
 mod page;
 mod tui;
+
+mod git_pull_requests {}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

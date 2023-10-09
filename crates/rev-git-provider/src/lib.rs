@@ -34,13 +34,14 @@ pub mod models {
         pub id: String,
         pub title: String,
         pub owner: String,
-        pub date: String,
-        pub cursor: String,
+        pub date: chrono::DateTime<chrono::Utc>,
     }
 
     #[derive(Debug, Clone)]
     pub struct ReviewList {
         pub items: Vec<ReviewListItem>,
+        pub last_cursor: Option<String>,
+        pub has_more: bool,
     }
 }
 
@@ -83,7 +84,8 @@ pub mod github {
         #[derive(GraphQLQuery)]
         #[graphql(
             schema_path = "github/graphql/schema.graphql",
-            query_path = "github/graphql/query.graphql"
+            query_path = "github/graphql/query.graphql",
+            response_derives = "Clone,Debug"
         )]
         pub struct UserRepositories;
     }
@@ -101,7 +103,7 @@ pub mod github {
     impl Default for GithubOptions {
         fn default() -> Self {
             Self {
-                uri: "https://github.com".into(),
+                uri: "https://api.github.com/graphql".into(),
                 use_gh: true,
             }
         }
@@ -195,45 +197,63 @@ pub mod github {
         async fn get_user_reviews(&self, user: &str, tags: &[&str]) -> anyhow::Result<ReviewList> {
             let vars = user_repositories::Variables {
                 owner: user.into(),
-                labels: Some(tags.iter().map(|t| t.to_string()).collect()),
+                labels: if tags.is_empty() {
+                    None
+                } else {
+                    Some(tags.iter().map(|t| t.to_string()).collect())
+                },
             };
             let query = UserRepositories::build_query(vars);
 
-            let res = self.client.post(&self.uri).json(&query).send().await?;
+            let res = self
+                .client
+                .post(&self.uri)
+                .json(&query)
+                .send()
+                .await
+                .context("github call graphql query failed")?;
 
-            let resp: Response<user_repositories::ResponseData> = res.json().await?;
+            if !res.status().is_success() {
+                let error_body = res.text().await?;
+                tracing::error!("GraphQL Error: {}", error_body);
+                anyhow::bail!("failed to query graphql endpoint");
+            }
+
+            let resp: Response<user_repositories::ResponseData> = res
+                .json()
+                .await
+                .context("failed to get json from response")?;
 
             if let Some(errors) = resp.errors {
                 let error = AggregateGraphQLError { errors };
                 anyhow::bail!("get_user_reviews failed with: {}", error);
             }
 
-            let repo = resp
+            let prs = resp
                 .data
-                .iter()
-                .flat_map(|d| d.user.as_ref())
-                .map(|u| u.pull_requests)
-                .collect();
+                .context("data to be present")?
+                .user
+                .context("user to be present")?
+                .pull_requests;
 
-            let mut end_cursor = None;
-            if let Some(repo) = repo {
-                if let Some(end_cursor) = repo.page_info.end_cursor {
-                    if repo.page_info.has_next_page {
-                        end_cursor = end_cursor;
-                    }
-                }
-            }
-
-            Ok(repos
-                .iter()
-                .map(|(node, owner)| ReviewListItem {
-                    id: node.id,
-                    title: node.title,
-                    owner: owner,
-                    date: node.created_at,
-                    cursor: todo!(),
+            let repos = prs
+                .nodes
+                .context("nodes to be present")?
+                .into_iter()
+                .flatten()
+                .map(|pr| ReviewListItem {
+                    id: pr.id,
+                    title: pr.title,
+                    owner: pr.repository.owner.login,
+                    date: pr.created_at,
                 })
-                .collect())
+                .collect::<Vec<_>>();
+
+            Ok(ReviewList {
+                items: repos,
+                last_cursor: prs.page_info.end_cursor,
+                has_more: prs.page_info.has_next_page,
+            })
         }
     }
 
@@ -258,12 +278,11 @@ mod test {
     async fn test_can_call_github() -> anyhow::Result<()> {
         let g = GitProvider::github()?;
 
+        //let titles = g.get_user_reviews("kjuulh", &["dependencies"]).await?;
         let titles = g.get_user_reviews("kjuulh", &[]).await?;
-        for title in &titles {
-            println!("title: {}", title);
-        }
+        println!("title: {:#?}", titles);
 
-        assert_ne!(0, titles.len());
+        assert_ne!(0, titles.items.len());
 
         Ok(())
     }

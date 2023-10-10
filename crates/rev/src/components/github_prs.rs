@@ -124,6 +124,10 @@ impl Component for GithubPrs {
         f: &mut crate::tui::Frame<'_>,
         area: ratatui::prelude::Rect,
     ) -> anyhow::Result<()> {
+        let layout = Layout::new()
+            .constraints(vec![Constraint::Percentage(100), Constraint::Min(1)].as_ref())
+            .split(area);
+
         if let Some(prs) = self.prs.as_ref() {
             let formatter = Formatter::default();
 
@@ -152,7 +156,11 @@ impl Component for GithubPrs {
             let t = Table::new(rows)
                 .header(header)
                 .column_spacing(3)
-                .block(Block::default().borders(Borders::ALL).title("Github prs"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Github pull requests"),
+                )
                 .widths(&[
                     Constraint::Percentage(10),
                     Constraint::Percentage(15),
@@ -160,10 +168,17 @@ impl Component for GithubPrs {
                     Constraint::Percentage(20),
                 ]);
 
-            f.render_stateful_widget(t, area, &mut self.table_state)
+            f.render_stateful_widget(t, layout[0], &mut self.table_state);
         } else {
-            f.render_widget(Paragraph::new("processing"), area)
+            f.render_widget(Paragraph::new("processing"), layout[0])
         }
+
+        f.render_widget(
+            Paragraph::new("some text")
+                .fg(Color::Black)
+                .bg(Color::White),
+            layout[1],
+        );
 
         Ok(())
     }

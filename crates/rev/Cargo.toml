@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+rev-git-provider.workspace = true
+
 anyhow.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
@@ -15,8 +17,14 @@ clap.workspace = true
 dotenv.workspace = true
 directories.workspace = true
 
+timeago.workspace = true
+chrono.workspace = true
+
 ratatui.workspace = true
 crossterm.workspace = true
 tui-term.workspace = true
 vt100.workspace = true
 portable-pty.workspace = true
+
+[dev-dependencies]
+tracing-test.workspace = true

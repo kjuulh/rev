@@ -1,10 +1,12 @@
 use ratatui::prelude::Rect;
+use rev_git_provider::GitProvider;
 use tokio::sync::mpsc;
 
 use crate::{
     action::Action,
-    components::{diff::GitDiff, home::Home},
+    components::{diff::GitDiff, github_prs::GithubPrs, home::Home},
     config::Config,
+    git_pull_requests::GitPullRequests,
     page::Page,
     tui,
 };
@@ -39,13 +41,20 @@ impl App {
     }
 
     pub async fn register_pages(&mut self) -> anyhow::Result<&mut Self> {
+        let git_provider = GitProvider::github()?;
+        let git_pull_requests = GitPullRequests::new(git_provider.clone());
+
         self.pages
             .push(Page::new("home", vec![Box::new(Home::new())]));
         self.pages
             .push(Page::new("diff", vec![Box::new(GitDiff::new())]));
+        self.pages.push(Page::new(
+            "github_review",
+            vec![Box::new(GithubPrs::new(git_pull_requests))],
+        ));
 
         //self.current_page = Some(home.clone());
-        self.current_page = Some("home".into());
+        self.current_page = Some("github_review".into());
 
         Ok(self)
     }
@@ -72,6 +81,10 @@ impl App {
         loop {
             if let Some(e) = tui.next().await {
                 match e {
+                    tui::Event::Init => {
+                        tracing::info!("sent init event");
+                        action_tx.send(Action::GotoPage("github_review".into()))?
+                    }
                     tui::Event::Quit => action_tx.send(Action::Quit)?,
                     tui::Event::Key(key) => {
                         if let Some(action) = self.config.keybinds.get(&vec![key]) {

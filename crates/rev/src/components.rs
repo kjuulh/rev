@@ -48,4 +48,5 @@ pub trait Component {
 }
 
 pub mod diff;
+pub mod github_prs;
 pub mod home;

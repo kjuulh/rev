@@ -18,11 +18,10 @@ mod app;
 mod cli;
 mod components;
 mod config;
+mod git_pull_requests;
 mod logging;
 mod page;
 mod tui;
-
-mod git_pull_requests {}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

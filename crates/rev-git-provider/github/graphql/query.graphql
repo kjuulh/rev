@@ -27,3 +27,139 @@ query UserRepositories($owner: String!, $labels: [String!], $cursor: String) {
     }
   }
 }
+
+query UserRepositoriesList(
+  $owner: String!
+  $labels: [String!]
+  $cursor: String
+) {
+  user(login: $owner) {
+    pullRequests(
+      first: 20
+      states: OPEN
+      orderBy: { field: CREATED_AT, direction: DESC }
+      labels: $labels
+      after: $cursor
+    ) {
+      nodes {
+        __typename
+        id
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+  }
+}
+
+query PullRequests($query: String!, $cursor: String) {
+  search(first: 20, type: ISSUE, query: $query, after: $cursor) {
+    issueCount
+    pageInfo {
+      endCursor
+      hasNextPage
+    }
+    nodes {
+      __typename
+      ... on PullRequest {
+        __typename
+        id
+        title
+        createdAt
+        repository {
+          name
+          owner {
+            __typename
+            id
+            login
+          }
+        }
+      }
+    }
+  }
+}
+
+query PullRequestsList($query: String!, $cursor: String) {
+  search(first: 20, type: ISSUE, query: $query, after: $cursor) {
+    issueCount
+    pageInfo {
+      endCursor
+      hasNextPage
+    }
+    nodes {
+      __typename
+      ... on PullRequest {
+        __typename
+        id
+      }
+    }
+  }
+}
+
+query Repository($owner: String!, $name: String!, $labels: [String!]) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(first: 10, states: OPEN, labels: $labels) {
+      nodes {
+        __typename
+        id
+        title
+        author {
+          __typename
+          login
+        }
+        labels(first: 5) {
+          nodes {
+            __typename
+            name
+          }
+        }
+        publishedAt
+
+        comments(last: 10) {
+          pageInfo {
+            hasPreviousPage
+          }
+          nodes {
+            __typename
+            id
+            author {
+              __typename
+              login
+            }
+            bodyText
+          }
+        }
+
+        commits(last: 1) {
+          nodes {
+            __typename
+            commit {
+              statusCheckRollup {
+                contexts(first: 5) {
+                  nodes {
+                    __typename
+                    ... on StatusContext {
+                      __typename
+                      id
+                      state
+                      description
+                      context
+                    }
+                    ... on CheckRun {
+                      __typename
+                      id
+                      name
+                      status
+                      conclusion
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

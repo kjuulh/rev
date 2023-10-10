@@ -48,7 +48,7 @@ impl GithubPrs {
             let mut prs_res = Vec::new();
 
             if prs_stream.is_none() {
-                *prs_stream = prs.run("kjuulh", &[]).await.ok();
+                *prs_stream = prs.run("kjuulh", None).await.ok();
             }
 
             if let Some(ref mut pr_stream) = *prs_stream {

@@ -17,7 +17,7 @@ impl GitPullRequests {
         &self,
         tx: mpsc::Sender<ReviewListItem>,
         owner: &str,
-        tags: Vec<String>,
+        tags: Option<Vec<String>>,
     ) -> anyhow::Result<()> {
         let mut buffer = VecDeque::new();
         let mut cursor = None;
@@ -30,11 +30,9 @@ impl GitPullRequests {
                 let review_list = self
                     .provider
                     .get_user_reviews_cursor(
-                        owner,
-                        tags.iter()
-                            .map(|t| t.as_str())
-                            .collect::<Vec<_>>()
-                            .as_slice(),
+                        Some("lunarway/squad-aura"),
+                        None,
+                        tags.clone(),
                         cursor,
                     )
                     .await?;
@@ -42,6 +40,7 @@ impl GitPullRequests {
                 has_more = review_list.has_more;
                 cursor = review_list.last_cursor;
                 seen += review_list.items.len();
+                tracing::debug!("get user reviews got items: {}", review_list.items.len());
                 buffer.extend(review_list.items);
 
                 if !has_more {
@@ -74,13 +73,12 @@ impl GitPullRequests {
     pub async fn run(
         &self,
         owner: &str,
-        tags: &[&str],
+        tags: Option<Vec<String>>,
     ) -> anyhow::Result<mpsc::Receiver<ReviewListItem>> {
         let s = self.clone();
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<ReviewListItem>(3);
+        let (tx, rx) = tokio::sync::mpsc::channel::<ReviewListItem>(3);
 
         let owner = owner.to_string();
-        let tags = tags.iter().map(|t| t.to_string()).collect::<Vec<_>>();
 
         tokio::spawn(async move {
             if let Err(e) = s.run_inner(tx, &owner, tags).await {

@@ -10,7 +10,7 @@ use crate::{
     Provider,
 };
 
-use self::graphql::{user_repositories, UserRepositories};
+use self::graphql::{pull_requests, user_repositories, PullRequests, UserRepositories};
 
 pub mod graphql {
     use graphql_client::GraphQLQuery;
@@ -24,6 +24,14 @@ pub mod graphql {
         response_derives = "Clone,Debug"
     )]
     pub struct UserRepositories;
+
+    #[derive(GraphQLQuery)]
+    #[graphql(
+        schema_path = "github/graphql/schema.graphql",
+        query_path = "github/graphql/query.graphql",
+        response_derives = "Clone,Debug"
+    )]
+    pub struct PullRequests;
 }
 
 pub struct Github {
@@ -129,26 +137,41 @@ impl std::error::Error for AggregateGraphQLError {}
 
 #[async_trait]
 impl GitUserReview for Github {
-    async fn get_user_reviews(&self, user: &str, tags: &[&str]) -> anyhow::Result<ReviewList> {
-        self.get_user_reviews_cursor(user, tags, None).await
+    async fn get_user_reviews(
+        &self,
+        requested: Option<&str>,
+        org: Option<&str>,
+        tags: Option<Vec<String>>,
+    ) -> anyhow::Result<ReviewList> {
+        self.get_user_reviews_cursor(requested, org, tags, None)
+            .await
     }
 
     async fn get_user_reviews_cursor(
         &self,
-        user: &str,
-        tags: &[&str],
+        requested: Option<&str>,
+        org: Option<&str>,
+        tags: Option<Vec<String>>,
         cursor: Option<String>,
     ) -> anyhow::Result<ReviewList> {
-        let vars = user_repositories::Variables {
-            owner: user.into(),
-            labels: if tags.is_empty() {
-                None
-            } else {
-                Some(tags.iter().map(|t| t.to_string()).collect())
+        let review_requested = match requested {
+            Some(review) => match review.split_once('/') {
+                Some((org, squad)) => format!("team-review-requested:{}/{}", org, squad),
+                None => format!("review-requested:{}", review),
             },
-            cursor,
+            None => "review-requested:@me".into(),
         };
-        let query = UserRepositories::build_query(vars);
+
+        let query = format!(
+            "is:pr {} state:open {} {}",
+            review_requested,
+            org.map(|o| format!("org:{}", o)).unwrap_or("".into()),
+            tags.map(|tags| format!("label:{}", tags.join(",")))
+                .unwrap_or("".into())
+        );
+
+        let vars = pull_requests::Variables { cursor, query };
+        let query = PullRequests::build_query(vars);
 
         let res = self
             .client
@@ -164,7 +187,7 @@ impl GitUserReview for Github {
             anyhow::bail!("failed to query graphql endpoint");
         }
 
-        let resp: Response<user_repositories::ResponseData> = res
+        let resp: Response<pull_requests::ResponseData> = res
             .json()
             .await
             .context("failed to get json from response")?;
@@ -174,18 +197,17 @@ impl GitUserReview for Github {
             anyhow::bail!("get_user_reviews failed with: {}", error);
         }
 
-        let prs = resp
-            .data
-            .context("data to be present")?
-            .user
-            .context("user to be present")?
-            .pull_requests;
+        let prs = resp.data.context("data to be present")?.search;
 
         let repos = prs
             .nodes
             .context("nodes to be present")?
             .into_iter()
             .flatten()
+            .filter_map(|pr| match pr {
+                pull_requests::PullRequestsSearchNodes::PullRequest(pr) => Some(pr),
+                _ => None,
+            })
             .map(|pr| ReviewListItem {
                 id: pr.id,
                 name: pr.repository.name,

@@ -4,11 +4,17 @@ use crate::models::{Review, ReviewList};
 
 #[async_trait]
 pub trait GitUserReview {
-    async fn get_user_reviews(&self, user: &str, tags: &[&str]) -> anyhow::Result<ReviewList>;
+    async fn get_user_reviews(
+        &self,
+        requested: Option<&str>,
+        org: Option<&str>,
+        tags: Option<Vec<String>>,
+    ) -> anyhow::Result<ReviewList>;
     async fn get_user_reviews_cursor(
         &self,
-        user: &str,
-        tags: &[&str],
+        requested: Option<&str>,
+        org: Option<&str>,
+        tags: Option<Vec<String>>,
         cursor: Option<String>,
     ) -> anyhow::Result<ReviewList>;
 }

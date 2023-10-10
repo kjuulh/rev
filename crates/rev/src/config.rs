@@ -35,6 +35,8 @@ impl Default for Keybinds {
     fn default() -> Self {
         let mut keybinds = HashMap::new();
         keybinds.insert(vec![parse_key_event("q").unwrap()], Action::Quit);
+        keybinds.insert(vec![parse_key_event("b").unwrap()], Action::BeginReview);
+        keybinds.insert(vec![parse_key_event("s").unwrap()], Action::SkipReview);
 
         Self(keybinds)
     }

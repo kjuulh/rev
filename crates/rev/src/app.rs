@@ -49,12 +49,12 @@ impl App {
         self.pages
             .push(Page::new("diff", vec![Box::new(GitDiff::new())]));
         self.pages.push(Page::new(
-            "github_review",
+            "github_review_list",
             vec![Box::new(GithubPrs::new(git_pull_requests))],
         ));
 
         //self.current_page = Some(home.clone());
-        self.current_page = Some("github_review".into());
+        self.current_page = Some("github_review_list".into());
 
         Ok(self)
     }
@@ -83,7 +83,7 @@ impl App {
                 match e {
                     tui::Event::Init => {
                         tracing::info!("sent init event");
-                        action_tx.send(Action::GotoPage("github_review".into()))?
+                        action_tx.send(Action::GotoPage("github_review_list".into()))?
                     }
                     tui::Event::Quit => action_tx.send(Action::Quit)?,
                     tui::Event::Key(key) => {
@@ -139,6 +139,9 @@ impl App {
                                 }
                             }
                         })?;
+                    }
+                    Action::BeginReview => {
+                        action_tx.send(Action::GotoPage("github_review".into()))?;
                     }
                     _ => {}
                 }

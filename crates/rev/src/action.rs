@@ -12,6 +12,8 @@ pub enum Action {
     Help,
     GotoPage(String),
     GitHubPrs(GitHubPrAction),
+    BeginReview,
+    SkipReview,
 }
 
 #[derive(Debug, Clone)]

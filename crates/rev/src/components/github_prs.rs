@@ -87,7 +87,7 @@ impl Component for GithubPrs {
         action: crate::action::Action,
     ) -> anyhow::Result<Option<crate::action::Action>> {
         match action {
-            Action::GotoPage(page) if page == "github_review" => {
+            Action::GotoPage(page) if page == "github_review_list" => {
                 tracing::info!("schedule fetch");
                 self.schedule_fetch()
             }

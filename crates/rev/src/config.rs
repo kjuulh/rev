@@ -8,17 +8,12 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::action::Action;
 
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct Config {
     pub keybinds: Keybinds,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            keybinds: Keybinds::default(),
-        }
-    }
-}
+
 
 pub type InnerKeybinds = HashMap<Vec<KeyEvent>, Action>;
 

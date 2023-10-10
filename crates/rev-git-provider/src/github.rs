@@ -10,7 +10,7 @@ use crate::{
     Provider,
 };
 
-use self::graphql::{pull_requests, user_repositories, PullRequests, UserRepositories};
+use self::graphql::{pull_requests, PullRequests};
 
 pub mod graphql {
     use graphql_client::GraphQLQuery;

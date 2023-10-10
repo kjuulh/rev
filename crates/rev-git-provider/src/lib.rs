@@ -42,7 +42,7 @@ mod test {
         let g = GitProvider::github()?;
 
         //let titles = g.get_user_reviews("kjuulh", &["dependencies"]).await?;
-        let titles = g.get_user_reviews("kjuulh", &[]).await?;
+        let titles = g.get_user_reviews(None, None, None).await?;
         println!("title: {:#?}", titles);
 
         assert_ne!(0, titles.items.len());

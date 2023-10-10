@@ -16,7 +16,7 @@ impl GitPullRequests {
     async fn run_inner(
         &self,
         tx: mpsc::Sender<ReviewListItem>,
-        owner: &str,
+        _owner: &str,
         tags: Option<Vec<String>>,
     ) -> anyhow::Result<()> {
         let mut buffer = VecDeque::new();

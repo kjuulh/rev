@@ -40,18 +40,13 @@ impl Component for GitDiff {
         &mut self,
         action: crate::action::Action,
     ) -> anyhow::Result<Option<crate::action::Action>> {
-        match action {
-            crate::action::Action::Tick => {
-                tracing::info!("tickle me");
-
-                if let Some(parser) = self.parser.clone() {
-                    let mut parser = parser.write().unwrap();
-                    self.scrollback += 1;
-                    //self.scrollback = self.scrollback % 999;
-                    parser.set_scrollback(self.scrollback as usize);
-                }
+        if let crate::action::Action::Tick = action {
+            if let Some(parser) = self.parser.clone() {
+                let mut parser = parser.write().unwrap();
+                self.scrollback += 1;
+                //self.scrollback = self.scrollback % 999;
+                parser.set_scrollback(self.scrollback as usize);
             }
-            _ => {}
         }
 
         Ok(None)

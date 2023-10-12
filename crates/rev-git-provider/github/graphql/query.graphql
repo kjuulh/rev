@@ -54,7 +54,7 @@ query UserRepositoriesList(
 }
 
 query PullRequests($query: String!, $cursor: String) {
-  search(first: 20, type: ISSUE, query: $query, after: $cursor) {
+  search(first: 10, type: ISSUE, query: $query, after: $cursor) {
     issueCount
     pageInfo {
       endCursor
@@ -67,6 +67,7 @@ query PullRequests($query: String!, $cursor: String) {
         id
         title
         createdAt
+        number
         repository {
           name
           owner {
@@ -92,67 +93,67 @@ query PullRequestsList($query: String!, $cursor: String) {
       ... on PullRequest {
         __typename
         id
+        number
       }
     }
   }
 }
 
-query Repository($owner: String!, $name: String!, $labels: [String!]) {
+query PullRequest($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
-    pullRequests(first: 10, states: OPEN, labels: $labels) {
-      nodes {
+    pullRequest(number: $number) {
+      __typename
+      id
+      number
+      title
+      author {
         __typename
-        id
-        title
-        author {
+        login
+      }
+      labels(first: 5) {
+        nodes {
           __typename
-          login
+          name
         }
-        labels(first: 5) {
-          nodes {
-            __typename
-            name
-          }
-        }
-        publishedAt
+      }
+      publishedAt
 
-        comments(last: 10) {
-          pageInfo {
-            hasPreviousPage
-          }
-          nodes {
-            __typename
-            id
-            author {
-              __typename
-              login
-            }
-            bodyText
-          }
+      comments(last: 10) {
+        pageInfo {
+          hasPreviousPage
         }
-
-        commits(last: 1) {
-          nodes {
+        nodes {
+          __typename
+          id
+          author {
             __typename
-            commit {
-              statusCheckRollup {
-                contexts(first: 5) {
-                  nodes {
+            login
+          }
+          bodyText
+        }
+      }
+
+      commits(last: 1) {
+        nodes {
+          __typename
+          commit {
+            statusCheckRollup {
+              contexts(first: 5) {
+                nodes {
+                  __typename
+                  ... on StatusContext {
                     __typename
-                    ... on StatusContext {
-                      __typename
-                      id
-                      state
-                      description
-                      context
-                    }
-                    ... on CheckRun {
-                      __typename
-                      id
-                      name
-                      status
-                      conclusion
-                    }
+                    id
+                    state
+                    description
+                    context
+                  }
+                  ... on CheckRun {
+                    checkRun: __typename
+                    id
+                    name
+                    status
+                    conclusion
                   }
                 }
               }

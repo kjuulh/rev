@@ -21,5 +21,10 @@ pub trait GitUserReview {
 
 #[async_trait]
 pub trait GitReview {
-    async fn get_review(&self, lookup: String) -> anyhow::Result<Review>;
+    async fn get_review(
+        &self,
+        owner: String,
+        name: String,
+        number: usize,
+    ) -> anyhow::Result<Option<Review>>;
 }

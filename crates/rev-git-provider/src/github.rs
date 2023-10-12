@@ -5,12 +5,18 @@ use reqwest::Client;
 use which::which;
 
 use crate::{
-    models::{Review, ReviewList, ReviewListItem},
+    models::{Comment, Comments, Review, ReviewList, ReviewListItem, StatusCheck},
     traits::{GitReview, GitUserReview},
     Provider,
 };
 
-use self::graphql::{pull_requests, PullRequests};
+use self::graphql::{
+    pull_request::{
+        self, CheckConclusionState, CheckStatusState,
+        PullRequestRepositoryPullRequestCommitsNodesCommitStatusCheckRollupContextsNodes,
+    },
+    pull_requests, PullRequest, PullRequests,
+};
 
 pub mod graphql {
     use graphql_client::GraphQLQuery;
@@ -32,6 +38,14 @@ pub mod graphql {
         response_derives = "Clone,Debug"
     )]
     pub struct PullRequests;
+
+    #[derive(GraphQLQuery)]
+    #[graphql(
+        schema_path = "github/graphql/schema.graphql",
+        query_path = "github/graphql/query.graphql",
+        response_derives = "Clone,Debug"
+    )]
+    pub struct PullRequest;
 }
 
 pub struct Github {
@@ -214,6 +228,7 @@ impl GitUserReview for Github {
                 title: pr.title,
                 owner: pr.repository.owner.login,
                 date: pr.created_at,
+                number: pr.number as usize,
             })
             .collect::<Vec<_>>();
 
@@ -225,10 +240,152 @@ impl GitUserReview for Github {
     }
 }
 
+type StatusChecks =
+    PullRequestRepositoryPullRequestCommitsNodesCommitStatusCheckRollupContextsNodes;
+
 #[async_trait]
 impl GitReview for Github {
-    async fn get_review(&self, _lookup: String) -> anyhow::Result<Review> {
-        todo!()
+    async fn get_review(
+        &self,
+        owner: String,
+        name: String,
+        number: usize,
+    ) -> anyhow::Result<Option<Review>> {
+        let vars = pull_request::Variables {
+            owner,
+            name,
+            number: number as i64,
+        };
+        let query = PullRequest::build_query(vars);
+
+        let res = self
+            .client
+            .post(&self.uri)
+            .json(&query)
+            .send()
+            .await
+            .context("github call graphql query failed")?;
+
+        if !res.status().is_success() {
+            let error_body = res.text().await?;
+            tracing::error!("GraphQL Error: {}", error_body);
+            anyhow::bail!("failed to query graphql endpoint");
+        }
+
+        let resp: Response<pull_request::ResponseData> = res
+            .json()
+            .await
+            .context("failed to get json from response")?;
+
+        if let Some(errors) = resp.errors {
+            let error = AggregateGraphQLError { errors };
+            anyhow::bail!("get_user_reviews failed with: {}", error);
+        }
+
+        let repository = resp.data.context("data to be present")?.repository;
+        let repository = match repository {
+            Some(pr) => pr,
+            None => return Ok(None),
+        };
+
+        let pr = match repository.pull_request {
+            Some(pr) => pr,
+            None => return Ok(None),
+        };
+
+        Ok(Some(Review {
+            id: pr.id,
+            number: pr.number as usize,
+            title: pr.title,
+            author: pr.author.map(|a| a.login).unwrap_or("ghost".to_string()),
+            publish_at: pr.published_at,
+            labels: pr
+                .labels
+                .into_iter()
+                .filter_map(|l| l.nodes)
+                .flat_map(|n| {
+                    n.iter()
+                        .flatten()
+                        .map(|n| n.name.clone())
+                        .collect::<Vec<_>>()
+                })
+                .collect(),
+            comments: Comments {
+                has_previous: pr.comments.page_info.has_previous_page,
+                comments: pr
+                    .comments
+                    .nodes
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                    .map(|n| Comment {
+                        author: n.author.map(|a| a.login).unwrap_or("ghost".to_string()),
+                        text: n.body_text,
+                    })
+                    .collect(),
+            },
+            status_checks: pr
+                .commits
+                .nodes
+                .into_iter()
+                .flatten()
+                .flatten()
+                .filter_map(|n| n.commit.status_check_rollup)
+                .filter_map(|n| n.contexts.nodes)
+                .flatten()
+                .flatten()
+                .map(|c| match c {
+                    StatusChecks::CheckRun(c) => StatusCheck::CheckRun {
+                        id: c.id,
+                        name: c.name,
+                        status: {
+                            let status_name = match c.status {
+                                CheckStatusState::COMPLETED => "completed",
+                                CheckStatusState::IN_PROGRESS => "in progress",
+                                CheckStatusState::PENDING => "pending",
+                                CheckStatusState::QUEUED => "queued",
+                                CheckStatusState::REQUESTED => "requested",
+                                CheckStatusState::WAITING => "waiting",
+                                CheckStatusState::Other(ref e) => e,
+                            };
+                            status_name.to_string()
+                        },
+                        conclusion: c
+                            .conclusion
+                            .map(|c| {
+                                let conclusion = match c {
+                                    CheckConclusionState::ACTION_REQUIRED => "action required",
+                                    CheckConclusionState::CANCELLED => "cancelled",
+                                    CheckConclusionState::FAILURE => "failure",
+                                    CheckConclusionState::NEUTRAL => "neutral",
+                                    CheckConclusionState::SKIPPED => "skipped",
+                                    CheckConclusionState::STALE => "stale",
+                                    CheckConclusionState::STARTUP_FAILURE => "startup failure",
+                                    CheckConclusionState::SUCCESS => "success",
+                                    CheckConclusionState::TIMED_OUT => "timed out",
+                                    CheckConclusionState::Other(ref o) => o,
+                                };
+                                conclusion.to_string()
+                            })
+                            .unwrap_or("unknown".to_string()),
+                    },
+                    StatusChecks::StatusContext(sc) => StatusCheck::StatusContext {
+                        id: sc.id,
+                        state: match sc.state {
+                            pull_request::StatusState::ERROR => "error",
+                            pull_request::StatusState::EXPECTED => "expected",
+                            pull_request::StatusState::FAILURE => "failure",
+                            pull_request::StatusState::PENDING => "pending",
+                            pull_request::StatusState::SUCCESS => "succeess",
+                            pull_request::StatusState::Other(ref o) => o,
+                        }
+                        .to_string(),
+                        description: sc.description,
+                        context: sc.context,
+                    },
+                })
+                .collect(),
+        }))
     }
 }
 

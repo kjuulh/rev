@@ -4,9 +4,9 @@ use tokio::sync::mpsc;
 
 use crate::{
     action::Action,
-    components::{diff::GitDiff, github_prs::GithubPrs, home::Home},
+    components::{diff::GitDiff, github_pr::GithubPr, github_prs::GithubPrs, home::Home},
     config::Config,
-    git_pull_requests::GitPullRequests,
+    git_pull_requests::{GitPullRequest, GitPullRequests},
     page::Page,
     tui,
 };
@@ -43,6 +43,7 @@ impl App {
     pub async fn register_pages(&mut self) -> anyhow::Result<&mut Self> {
         let git_provider = GitProvider::github()?;
         let git_pull_requests = GitPullRequests::new(git_provider.clone());
+        let git_pull_request = GitPullRequest::new(git_provider.clone(), git_pull_requests.clone());
 
         self.pages
             .push(Page::new("home", vec![Box::new(Home::new())]));
@@ -50,7 +51,11 @@ impl App {
             .push(Page::new("diff", vec![Box::new(GitDiff::new())]));
         self.pages.push(Page::new(
             "github_review_list",
-            vec![Box::new(GithubPrs::new(git_pull_requests))],
+            vec![Box::new(GithubPrs::new(git_pull_requests.clone()))],
+        ));
+        self.pages.push(Page::new(
+            "github_review",
+            vec![Box::new(GithubPr::new(git_pull_request))],
         ));
 
         //self.current_page = Some(home.clone());
@@ -114,6 +119,9 @@ impl App {
                 }
 
                 match action {
+                    Action::GotoPage(ref page) => {
+                        self.current_page = Some(page.clone());
+                    }
                     Action::Resize(x, y) => {
                         tui.resize(Rect::new(0, 0, x, y))?;
                         tui.draw(|f| {

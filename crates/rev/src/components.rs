@@ -2,6 +2,11 @@ use crossterm::event::{KeyEvent, MouseEvent};
 use ratatui::layout::Rect;
 use tokio::sync::mpsc::UnboundedSender;
 
+pub mod diff;
+pub mod github_pr;
+pub mod github_prs;
+pub mod home;
+
 use crate::{
     action::Action,
     config::Config,
@@ -46,7 +51,3 @@ pub trait Component {
 
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> anyhow::Result<()>;
 }
-
-pub mod diff;
-pub mod github_prs;
-pub mod home;

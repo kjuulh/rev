@@ -111,6 +111,8 @@ impl Component for GithubPrs {
                         }
                     }
                     GitHubPrAction::ExitProcessing => self.state = action,
+                    GitHubPrAction::NextReview { .. } => {}
+                    GitHubPrAction::DoneReview => {}
                 }
             }
             _ => {}

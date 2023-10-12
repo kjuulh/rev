@@ -1,3 +1,5 @@
+use rev_git_provider::models::Review;
+
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
@@ -23,6 +25,10 @@ pub enum GitHubPrAction {
     AddReviews {
         items: Vec<rev_git_provider::models::ReviewListItem>,
     },
+    NextReview {
+        pr: Review,
+    },
+    DoneReview,
     ExitProcessing,
 }
 

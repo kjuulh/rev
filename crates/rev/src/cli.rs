@@ -1,6 +1,29 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
-use crate::{app::App, Command, Commands};
+use crate::{app::App, logging};
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None, subcommand_required = true)]
+struct Command {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    Init,
+    Review,
+    Config {
+        #[command(subcommand)]
+        subcommand: Option<ConfigCommand>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ConfigCommand {
+    Get,
+    Validate,
+}
 
 pub async fn run() -> anyhow::Result<()> {
     let cli = Command::parse();
@@ -10,6 +33,8 @@ pub async fn run() -> anyhow::Result<()> {
             tracing::info!("hello rev");
         }
         Commands::Review => {
+            logging::initialize_panic_handler()?;
+
             tracing::info!("starting tui");
             match App::default().register_pages().await {
                 Ok(a) => {
@@ -25,6 +50,13 @@ pub async fn run() -> anyhow::Result<()> {
             }
             tracing::info!("stopping tui");
         }
+        Commands::Config { subcommand } => match subcommand {
+            Some(subcommand) => match subcommand {
+                ConfigCommand::Get => todo!(),
+                ConfigCommand::Validate => todo!(),
+            },
+            None => todo!(),
+        },
     }
 
     Ok(())

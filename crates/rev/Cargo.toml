@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 rev-git-provider.workspace = true
 rev-widget-list.workspace = true
+rev-config.workspace = true
+rev-config-derive.workspace = true
 
 anyhow.workspace = true
 tokio.workspace = true

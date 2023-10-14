@@ -15,7 +15,7 @@ pub fn initialize_logging() -> anyhow::Result<()> {
     std::fs::create_dir_all(&project)?;
     let log_path = project.join("rev.log");
 
-    println!("logging to: {}", log_path.display());
+    //println!("logging to: {}", log_path.display());
 
     let log_file = std::fs::File::create(log_path)?;
     std::env::set_var(

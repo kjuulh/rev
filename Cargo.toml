@@ -6,6 +6,8 @@ resolver = "2"
 rev = { path = "crates/rev" }
 rev-git-provider = { path = "crates/rev-git-provider" }
 rev-widget-list = { path = "crates/rev-widget-list" }
+rev-config = { path = "crates/rev-config" }
+rev-config-derive = { path = "crates/rev-config-derive" }
 
 anyhow = { version = "1.0.75" }
 async-trait = {version = "0.1.73"}
@@ -32,3 +34,6 @@ which = {version = "4.4.2"}
 tracing-test = {version = "0.2.4"}
 chrono = {version = "0.4.31", features = ["serde"]}
 timeago = {version = "0.4.2"}
+proc-macro2 = {version = "1.0.69"}
+quote = "1.0"
+syn = "1.0"

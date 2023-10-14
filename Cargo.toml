@@ -5,6 +5,7 @@ resolver = "2"
 [workspace.dependencies]
 rev = { path = "crates/rev" }
 rev-git-provider = { path = "crates/rev-git-provider" }
+rev-widget-list = { path = "crates/rev-widget-list" }
 
 anyhow = { version = "1.0.75" }
 async-trait = {version = "0.1.73"}

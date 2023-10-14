@@ -1264,6 +1264,7 @@ dependencies = [
  "portable-pty",
  "ratatui",
  "rev-git-provider",
+ "rev-widget-list",
  "timeago",
  "tokio",
  "tokio-util",
@@ -1291,6 +1292,14 @@ dependencies = [
  "tracing",
  "tracing-test",
  "which",
+]
+
+[[package]]
+name = "rev-widget-list"
+version = "0.1.0"
+dependencies = [
+ "crossterm",
+ "ratatui",
 ]
 
 [[package]]

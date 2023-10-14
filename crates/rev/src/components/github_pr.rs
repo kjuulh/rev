@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use ratatui::{prelude::*, widgets::*};
+use ratatui::{prelude::*, text::Spans, widgets::*};
 use rev_git_provider::models::{Review, ReviewListItem};
+use rev_widget_list::{SelectableWidgetList, WidgetListItem};
 use timeago::Formatter;
 use tokio::sync::{
     mpsc::{Receiver, UnboundedSender},
@@ -138,23 +139,94 @@ impl Component for GithubPr {
             .direction(Direction::Horizontal)
             .split(main[1]);
 
+        let mut right_body_contraints = 0;
+        let mut comment_list = {
+            if pr.comments.comments.is_empty() {
+                None
+            } else {
+                let comments_list_items = pr
+                    .comments
+                    .comments
+                    .iter()
+                    .map(|c| CommentItem::new(&c.author, &c.text, 4))
+                    .collect::<Vec<_>>();
+
+                let mut comments_list = SelectableWidgetList::new(comments_list_items)
+                    .block(block.clone().title("comments"))
+                    .truncate(true);
+
+                right_body_contraints += 1;
+                Some(comments_list)
+            }
+        };
+
+        let mut status_checks_list = {
+            if pr.status_checks.is_empty() {
+                None
+            } else {
+                let checks_items = pr
+                    .status_checks
+                    .iter()
+                    .map(|c| match c {
+                        rev_git_provider::models::StatusCheck::StatusContext {
+                            id,
+                            state,
+                            description,
+                            context,
+                        } => CommentItem::new(
+                            &context,
+                            &description.clone().unwrap_or("".to_string()),
+                            2,
+                        ),
+                        rev_git_provider::models::StatusCheck::CheckRun {
+                            id,
+                            name,
+                            status,
+                            conclusion,
+                        } => CommentItem::new(&name, &conclusion, 2),
+                    })
+                    .collect::<Vec<_>>();
+
+                let mut status_checks_list = SelectableWidgetList::new(checks_items)
+                    .block(block.clone().title("status checks"))
+                    .truncate(true);
+
+                right_body_contraints += 1;
+                Some(status_checks_list)
+            }
+        };
+
         let rightBody = Layout::new()
-            .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
+            .constraints(
+                (0..=right_body_contraints)
+                    .map(|_| Constraint::Ratio(1, right_body_contraints))
+                    .collect::<Vec<_>>(),
+            )
             .direction(Direction::Vertical)
             .split(body[1]);
 
+        tracing::info!(
+            "len of right body: {}, status_checks {}, comments {}",
+            rightBody.len(),
+            status_checks_list.is_some(),
+            comment_list.is_some()
+        );
+
         let description = body[0];
-        let comments = rightBody[0];
-        let statusChecks = rightBody[1];
+        //let statusChecks = rightBody[1];
 
-        let comments_list_items = pr
-            .comments
-            .comments
-            .iter()
-            .map(|c| Paragraph::new(c.text).block(block.title(c.author)))
-            .collect::<Vec<_>>();
+        let mut next = 0;
+        if let Some(mut comments_list) = comment_list {
+            let comments = rightBody[next];
+            f.render_widget(&mut comments_list, comments);
+            next += 1;
+        }
 
-        let comments_list = List::new(comments_list_items);
+        if let Some(mut status_checks_list) = status_checks_list {
+            let status_checks = rightBody[next];
+            f.render_widget(&mut status_checks_list, status_checks);
+            next += 1;
+        }
 
         self.vertical_scroll_state = self
             .vertical_scroll_state
@@ -175,5 +247,53 @@ impl Component for GithubPr {
         );
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CommentItem<'a> {
+    paragraph: Paragraph<'a>,
+    height: u16,
+}
+
+impl CommentItem<'_> {
+    pub fn new(author: &str, body: &str, height: u16) -> Self {
+        let paragraph = Paragraph::new(vec![Spans::from(Span::styled(
+            body.to_string(),
+            Style::default(),
+        ))])
+        .wrap(Wrap { trim: true })
+        .style(Style::default().bg(Color::Black))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(author.to_string()),
+        );
+
+        Self { paragraph, height }
+    }
+
+    // Render the item differently depending on the selection state
+    fn modify_fn(mut item: WidgetListItem<Self>, selected: Option<bool>) -> WidgetListItem<Self> {
+        if let Some(selected) = selected {
+            if selected {
+                let style = Style::default().bg(Color::White);
+                item.content.paragraph = item.content.paragraph.style(style);
+            }
+        }
+        item
+    }
+}
+
+impl<'a> From<CommentItem<'a>> for WidgetListItem<CommentItem<'a>> {
+    fn from(val: CommentItem<'a>) -> Self {
+        let height = val.height.to_owned();
+        Self::new(val, height).modify_fn(CommentItem::modify_fn)
+    }
+}
+
+impl<'a> Widget for CommentItem<'a> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        self.paragraph.render(area, buf);
     }
 }

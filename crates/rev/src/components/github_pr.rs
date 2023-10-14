@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ratatui::{prelude::*, widgets::*};
 use rev_git_provider::models::Review;
-use rev_widget_list::{SelectableWidgetList, WidgetListItem};
+use rev_widget_list::SelectableWidgetList;
 
 use tokio::sync::{
     mpsc::{Receiver, UnboundedSender},
@@ -11,6 +11,7 @@ use tokio::sync::{
 
 use crate::{
     action::{Action, GitHubPrAction},
+    components::github_pr::{comments::CommentItem, status::StatusCheckItem},
     git_pull_requests::GitPullRequest,
 };
 
@@ -170,7 +171,7 @@ impl Component for GithubPr {
                             state: _,
                             description,
                             context,
-                        } => CommentItem::new(
+                        } => StatusCheckItem::new(
                             context,
                             &description.clone().unwrap_or("".to_string()),
                             2,
@@ -180,7 +181,7 @@ impl Component for GithubPr {
                             name,
                             status: _,
                             conclusion,
-                        } => CommentItem::new(name, conclusion, 2),
+                        } => StatusCheckItem::new(name, conclusion, 2),
                     })
                     .collect::<Vec<_>>();
 
@@ -247,47 +248,111 @@ impl Component for GithubPr {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct CommentItem<'a> {
-    paragraph: Paragraph<'a>,
-    height: u16,
-}
+pub mod comments {
 
-impl CommentItem<'_> {
-    pub fn new(author: &str, body: &str, height: u16) -> Self {
-        let paragraph = Paragraph::new(body.to_string())
-            .wrap(Wrap { trim: true })
-            .style(Style::default().bg(Color::Black))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(author.to_string()),
-            );
+    use ratatui::{prelude::*, widgets::*};
 
-        Self { paragraph, height }
+    use rev_widget_list::WidgetListItem;
+
+    #[derive(Debug, Clone)]
+    pub struct CommentItem<'a> {
+        paragraph: Paragraph<'a>,
+        height: u16,
     }
 
-    // Render the item differently depending on the selection state
-    fn modify_fn(mut item: WidgetListItem<Self>, selected: Option<bool>) -> WidgetListItem<Self> {
-        if let Some(selected) = selected {
-            if selected {
-                let style = Style::default().bg(Color::White);
-                item.content.paragraph = item.content.paragraph.style(style);
-            }
+    impl CommentItem<'_> {
+        pub fn new(author: &str, body: &str, height: u16) -> Self {
+            let paragraph = Paragraph::new(body.to_string())
+                .wrap(Wrap { trim: true })
+                .style(Style::default().bg(Color::Black))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(author.to_string()),
+                );
+
+            Self { paragraph, height }
         }
-        item
+
+        // Render the item differently depending on the selection state
+        fn modify_fn(
+            mut item: WidgetListItem<Self>,
+            selected: Option<bool>,
+        ) -> WidgetListItem<Self> {
+            if let Some(selected) = selected {
+                if selected {
+                    let style = Style::default().bg(Color::White);
+                    item.content.paragraph = item.content.paragraph.style(style);
+                }
+            }
+            item
+        }
+    }
+
+    impl<'a> From<CommentItem<'a>> for WidgetListItem<CommentItem<'a>> {
+        fn from(val: CommentItem<'a>) -> Self {
+            let height = val.height.to_owned();
+            Self::new(val, height).modify_fn(CommentItem::modify_fn)
+        }
+    }
+
+    impl<'a> Widget for CommentItem<'a> {
+        fn render(self, area: Rect, buf: &mut Buffer) {
+            self.paragraph.render(area, buf);
+        }
     }
 }
 
-impl<'a> From<CommentItem<'a>> for WidgetListItem<CommentItem<'a>> {
-    fn from(val: CommentItem<'a>) -> Self {
-        let height = val.height.to_owned();
-        Self::new(val, height).modify_fn(CommentItem::modify_fn)
-    }
-}
+pub mod status {
+    use ratatui::{prelude::*, widgets::*};
 
-impl<'a> Widget for CommentItem<'a> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        self.paragraph.render(area, buf);
+    use rev_widget_list::WidgetListItem;
+
+    #[derive(Debug, Clone)]
+    pub struct StatusCheckItem<'a> {
+        paragraph: Paragraph<'a>,
+        height: u16,
+    }
+
+    impl StatusCheckItem<'_> {
+        pub fn new(author: &str, body: &str, height: u16) -> Self {
+            let paragraph = Paragraph::new(body.to_string())
+                .wrap(Wrap { trim: true })
+                .style(Style::default().bg(Color::Black))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(author.to_string()),
+                );
+
+            Self { paragraph, height }
+        }
+
+        // Render the item differently depending on the selection state
+        fn modify_fn(
+            mut item: WidgetListItem<Self>,
+            selected: Option<bool>,
+        ) -> WidgetListItem<Self> {
+            if let Some(selected) = selected {
+                if selected {
+                    let style = Style::default().bg(Color::White);
+                    item.content.paragraph = item.content.paragraph.style(style);
+                }
+            }
+            item
+        }
+    }
+
+    impl<'a> From<StatusCheckItem<'a>> for WidgetListItem<StatusCheckItem<'a>> {
+        fn from(val: StatusCheckItem<'a>) -> Self {
+            let height = val.height.to_owned();
+            Self::new(val, height).modify_fn(StatusCheckItem::modify_fn)
+        }
+    }
+
+    impl<'a> Widget for StatusCheckItem<'a> {
+        fn render(self, area: Rect, buf: &mut Buffer) {
+            self.paragraph.render(area, buf);
+        }
     }
 }

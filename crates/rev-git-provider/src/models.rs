@@ -27,18 +27,28 @@ pub struct Comment {
 }
 
 #[derive(Debug, Clone)]
+pub enum CurrentState {
+    Success,
+    Pending,
+    Failure,
+    Expired,
+}
+
+#[derive(Debug, Clone)]
 pub enum StatusCheck {
     StatusContext {
         id: String,
         state: String,
         description: Option<String>,
         context: String,
+        current: CurrentState,
     },
     CheckRun {
         id: String,
         name: String,
         status: String,
         conclusion: String,
+        current: CurrentState,
     },
 }
 

@@ -5,7 +5,7 @@ use reqwest::Client;
 use which::which;
 
 use crate::{
-    models::{Comment, Comments, Review, ReviewList, ReviewListItem, StatusCheck},
+    models::{Comment, Comments, CurrentState, Review, ReviewList, ReviewListItem, StatusCheck},
     traits::{GitReview, GitUserReview},
     Provider,
 };
@@ -340,6 +340,22 @@ impl GitReview for Github {
                     StatusChecks::CheckRun(c) => StatusCheck::CheckRun {
                         id: c.id,
                         name: c.name,
+                        current: c
+                            .conclusion
+                            .as_ref()
+                            .map(|c| match c {
+                                CheckConclusionState::ACTION_REQUIRED => CurrentState::Pending,
+                                CheckConclusionState::CANCELLED => CurrentState::Failure,
+                                CheckConclusionState::FAILURE => CurrentState::Failure,
+                                CheckConclusionState::NEUTRAL => CurrentState::Pending,
+                                CheckConclusionState::SKIPPED => CurrentState::Success,
+                                CheckConclusionState::STALE => CurrentState::Expired,
+                                CheckConclusionState::STARTUP_FAILURE => CurrentState::Failure,
+                                CheckConclusionState::SUCCESS => CurrentState::Success,
+                                CheckConclusionState::TIMED_OUT => CurrentState::Failure,
+                                CheckConclusionState::Other(_) => CurrentState::Pending,
+                            })
+                            .unwrap_or(CurrentState::Pending),
                         status: {
                             let status_name = match c.status {
                                 CheckStatusState::COMPLETED => "completed",
@@ -373,6 +389,14 @@ impl GitReview for Github {
                     },
                     StatusChecks::StatusContext(sc) => StatusCheck::StatusContext {
                         id: sc.id,
+                        current: match sc.state {
+                            pull_request::StatusState::ERROR => CurrentState::Failure,
+                            pull_request::StatusState::EXPECTED => CurrentState::Pending,
+                            pull_request::StatusState::FAILURE => CurrentState::Failure,
+                            pull_request::StatusState::PENDING => CurrentState::Pending,
+                            pull_request::StatusState::SUCCESS => CurrentState::Success,
+                            pull_request::StatusState::Other(_) => CurrentState::Pending,
+                        },
                         state: match sc.state {
                             pull_request::StatusState::ERROR => "error",
                             pull_request::StatusState::EXPECTED => "expected",

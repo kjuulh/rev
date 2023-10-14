@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
-use chrono::Utc;
-use ratatui::{prelude::*, text::Spans, widgets::*};
-use rev_git_provider::models::{Review, ReviewListItem};
+use ratatui::{prelude::*, widgets::*};
+use rev_git_provider::models::Review;
 use rev_widget_list::{SelectableWidgetList, WidgetListItem};
-use timeago::Formatter;
+
 use tokio::sync::{
     mpsc::{Receiver, UnboundedSender},
     Mutex,
@@ -12,7 +11,7 @@ use tokio::sync::{
 
 use crate::{
     action::{Action, GitHubPrAction},
-    git_pull_requests::{GitPullRequest, GitPullRequests},
+    git_pull_requests::GitPullRequest,
 };
 
 use super::Component;
@@ -23,7 +22,6 @@ pub struct GithubPr {
     action_tx: Option<UnboundedSender<Action>>,
     state: GitHubPrAction,
     pr: Option<Review>,
-    table_state: TableState,
     prs_stream: Arc<Mutex<Option<Receiver<Review>>>>,
 }
 
@@ -34,7 +32,6 @@ impl GithubPr {
             action_tx: None,
             state: GitHubPrAction::Normal,
             pr: None,
-            table_state: TableState::default(),
             prs_stream: Arc::default(),
             vertical_scroll_state: ScrollbarState::default(),
         }
@@ -140,7 +137,7 @@ impl Component for GithubPr {
             .split(main[1]);
 
         let mut right_body_contraints = 0;
-        let mut comment_list = {
+        let comment_list = {
             if pr.comments.comments.is_empty() {
                 None
             } else {
@@ -151,7 +148,7 @@ impl Component for GithubPr {
                     .map(|c| CommentItem::new(&c.author, &c.text, 4))
                     .collect::<Vec<_>>();
 
-                let mut comments_list = SelectableWidgetList::new(comments_list_items)
+                let comments_list = SelectableWidgetList::new(comments_list_items)
                     .block(block.clone().title("comments"))
                     .truncate(true);
 
@@ -160,7 +157,7 @@ impl Component for GithubPr {
             }
         };
 
-        let mut status_checks_list = {
+        let status_checks_list = {
             if pr.status_checks.is_empty() {
                 None
             } else {
@@ -169,25 +166,25 @@ impl Component for GithubPr {
                     .iter()
                     .map(|c| match c {
                         rev_git_provider::models::StatusCheck::StatusContext {
-                            id,
-                            state,
+                            id: _,
+                            state: _,
                             description,
                             context,
                         } => CommentItem::new(
-                            &context,
+                            context,
                             &description.clone().unwrap_or("".to_string()),
                             2,
                         ),
                         rev_git_provider::models::StatusCheck::CheckRun {
-                            id,
+                            id: _,
                             name,
-                            status,
+                            status: _,
                             conclusion,
-                        } => CommentItem::new(&name, &conclusion, 2),
+                        } => CommentItem::new(name, conclusion, 2),
                     })
                     .collect::<Vec<_>>();
 
-                let mut status_checks_list = SelectableWidgetList::new(checks_items)
+                let status_checks_list = SelectableWidgetList::new(checks_items)
                     .block(block.clone().title("status checks"))
                     .truncate(true);
 
@@ -196,7 +193,7 @@ impl Component for GithubPr {
             }
         };
 
-        let rightBody = Layout::new()
+        let right_body = Layout::new()
             .constraints(
                 (0..=right_body_contraints)
                     .map(|_| Constraint::Ratio(1, right_body_contraints))
@@ -207,7 +204,7 @@ impl Component for GithubPr {
 
         tracing::info!(
             "len of right body: {}, status_checks {}, comments {}",
-            rightBody.len(),
+            right_body.len(),
             status_checks_list.is_some(),
             comment_list.is_some()
         );
@@ -217,13 +214,13 @@ impl Component for GithubPr {
 
         let mut next = 0;
         if let Some(mut comments_list) = comment_list {
-            let comments = rightBody[next];
+            let comments = right_body[next];
             f.render_widget(&mut comments_list, comments);
             next += 1;
         }
 
         if let Some(mut status_checks_list) = status_checks_list {
-            let status_checks = rightBody[next];
+            let status_checks = right_body[next];
             f.render_widget(&mut status_checks_list, status_checks);
             next += 1;
         }
@@ -258,17 +255,14 @@ pub struct CommentItem<'a> {
 
 impl CommentItem<'_> {
     pub fn new(author: &str, body: &str, height: u16) -> Self {
-        let paragraph = Paragraph::new(vec![Spans::from(Span::styled(
-            body.to_string(),
-            Style::default(),
-        ))])
-        .wrap(Wrap { trim: true })
-        .style(Style::default().bg(Color::Black))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(author.to_string()),
-        );
+        let paragraph = Paragraph::new(body.to_string())
+            .wrap(Wrap { trim: true })
+            .style(Style::default().bg(Color::Black))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(author.to_string()),
+            );
 
         Self { paragraph, height }
     }

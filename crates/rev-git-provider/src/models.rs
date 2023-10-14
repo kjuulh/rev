@@ -5,6 +5,8 @@ pub struct Review {
     pub id: String,
     pub number: usize,
     pub title: String,
+    pub repository: String,
+    pub description: String,
     pub author: String,
     pub publish_at: Option<DateTime<Utc>>,
     pub labels: Vec<String>,

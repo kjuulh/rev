@@ -17,6 +17,7 @@ use crate::{
 use super::Component;
 
 pub struct GithubPr {
+    vertical_scroll_state: ScrollbarState,
     prs_provider: GitPullRequest,
     action_tx: Option<UnboundedSender<Action>>,
     state: GitHubPrAction,
@@ -34,6 +35,7 @@ impl GithubPr {
             pr: None,
             table_state: TableState::default(),
             prs_stream: Arc::default(),
+            vertical_scroll_state: ScrollbarState::default(),
         }
     }
 
@@ -114,8 +116,9 @@ impl Component for GithubPr {
         area: ratatui::prelude::Rect,
     ) -> anyhow::Result<()> {
         let layout = Layout::new()
-            .constraints(vec![Constraint::Percentage(100), Constraint::Min(1)].as_ref())
+            .constraints(vec![Constraint::Percentage(100), Constraint::Min(1)])
             .split(area);
+        let block = Block::default().borders(Borders::ALL);
 
         if self.pr.is_none() {
             f.render_widget(Paragraph::new("processing"), layout[0]);
@@ -125,24 +128,50 @@ impl Component for GithubPr {
         let main = Layout::new()
             .constraints(vec![Constraint::Min(3), Constraint::Percentage(100)])
             .split(layout[0]);
+        f.render_widget(
+            Paragraph::new(format!("{} - #{}", &pr.repository, &pr.number)),
+            main[0],
+        );
 
         let body = Layout::new()
             .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
             .direction(Direction::Horizontal)
             .split(main[1]);
 
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(pr.title.clone());
+        let rightBody = Layout::new()
+            .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
+            .direction(Direction::Vertical)
+            .split(body[1]);
 
-        f.render_widget(Paragraph::new(format!("github pr, {}", pr.title)), main[0]);
+        let description = body[0];
+        let comments = rightBody[0];
+        let statusChecks = rightBody[1];
+
+        let comments_list_items = pr
+            .comments
+            .comments
+            .iter()
+            .map(|c| Paragraph::new(c.text).block(block.title(c.author)))
+            .collect::<Vec<_>>();
+
+        let comments_list = List::new(comments_list_items);
+
+        self.vertical_scroll_state = self
+            .vertical_scroll_state
+            .content_length(pr.description.len() as u16);
         f.render_widget(
-            Paragraph::new(format!("github pr, {}", pr.author)).block(block.clone()),
-            body[0],
+            Paragraph::new(pr.description.as_str())
+                .wrap(Wrap { trim: true })
+                .block(block.title(pr.title.as_str())),
+            description,
         );
-        f.render_widget(
-            Paragraph::new(format!("github pr, {}", pr.number)).block(block),
-            body[1],
+        f.render_stateful_widget(
+            Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("↑"))
+                .end_symbol(Some("↓")),
+            description,
+            &mut self.vertical_scroll_state,
         );
 
         Ok(())

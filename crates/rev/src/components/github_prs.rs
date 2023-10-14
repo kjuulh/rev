@@ -127,7 +127,7 @@ impl Component for GithubPrs {
         area: ratatui::prelude::Rect,
     ) -> anyhow::Result<()> {
         let layout = Layout::new()
-            .constraints(vec![Constraint::Percentage(100), Constraint::Min(1)].as_ref())
+            .constraints(vec![Constraint::Percentage(100), Constraint::Min(1)])
             .split(area);
 
         if let Some(prs) = self.prs.as_ref() {

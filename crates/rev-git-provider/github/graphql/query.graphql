@@ -106,6 +106,7 @@ query PullRequest($owner: String!, $name: String!, $number: Int!) {
       id
       number
       title
+      bodyText
       author {
         __typename
         login
@@ -117,6 +118,10 @@ query PullRequest($owner: String!, $name: String!, $number: Int!) {
         }
       }
       publishedAt
+
+      repository {
+        nameWithOwner
+      }
 
       comments(last: 10) {
         pageInfo {

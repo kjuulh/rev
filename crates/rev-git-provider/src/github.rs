@@ -296,7 +296,9 @@ impl GitReview for Github {
         Ok(Some(Review {
             id: pr.id,
             number: pr.number as usize,
+            repository: pr.repository.name_with_owner,
             title: pr.title,
+            description: pr.body_text,
             author: pr.author.map(|a| a.login).unwrap_or("ghost".to_string()),
             publish_at: pr.published_at,
             labels: pr

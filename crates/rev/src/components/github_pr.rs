@@ -117,25 +117,32 @@ impl Component for GithubPr {
             .constraints(vec![Constraint::Percentage(100), Constraint::Min(1)].as_ref())
             .split(area);
 
-        if self.state == GitHubPrAction::DoneReview {
-            f.render_widget(Paragraph::new(format!("done review")), layout[0]);
+        if self.pr.is_none() {
+            f.render_widget(Paragraph::new("processing"), layout[0]);
             return Ok(());
         }
+        let pr = self.pr.as_ref().unwrap();
+        let main = Layout::new()
+            .constraints(vec![Constraint::Min(3), Constraint::Percentage(100)])
+            .split(layout[0]);
 
-        if let Some(pr) = &self.pr {
-            f.render_widget(
-                Paragraph::new(format!("github pr, {}", pr.title)),
-                layout[0],
-            );
-        } else {
-            f.render_widget(Paragraph::new("processing"), layout[0]);
-        }
+        let body = Layout::new()
+            .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
+            .direction(Direction::Horizontal)
+            .split(main[1]);
 
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(pr.title.clone());
+
+        f.render_widget(Paragraph::new(format!("github pr, {}", pr.title)), main[0]);
         f.render_widget(
-            Paragraph::new("some text")
-                .fg(Color::Black)
-                .bg(Color::White),
-            layout[1],
+            Paragraph::new(format!("github pr, {}", pr.author)).block(block.clone()),
+            body[0],
+        );
+        f.render_widget(
+            Paragraph::new(format!("github pr, {}", pr.number)).block(block),
+            body[1],
         );
 
         Ok(())

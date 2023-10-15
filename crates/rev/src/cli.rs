@@ -1,12 +1,17 @@
 use clap::{Parser, Subcommand};
 
-use crate::{app::App, logging};
+use crate::{
+    app::App, application_config::inner_application_config::InnerApplicationConfig, logging,
+};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None, subcommand_required = true)]
 struct Command {
     #[command(subcommand)]
     command: Option<Commands>,
+
+    #[clap(flatten)]
+    global_args: InnerApplicationConfig,
 }
 
 #[derive(Subcommand)]
@@ -55,7 +60,9 @@ pub async fn run() -> anyhow::Result<()> {
                 ConfigCommand::Get => todo!(),
                 ConfigCommand::Validate => todo!(),
             },
-            None => todo!(),
+            None => {
+                tracing::debug!("getting config");
+            }
         },
     }
 

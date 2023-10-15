@@ -11,7 +11,6 @@ mod tui;
 mod application_config {
     use std::path::PathBuf;
 
-    use rev_config::AppConfig;
     use rev_config_derive::AppConfig;
 
     #[derive(Clone, Debug)]
@@ -45,7 +44,9 @@ mod application_config {
     }
 
     #[derive(AppConfig, Clone, Debug)]
-    pub struct InnerApplicationConfig {}
+    pub struct InnerApplicationConfig {
+        pub committer: String,
+    }
 
     #[derive(Clone, Debug)]
     pub struct ApplicationConfig {

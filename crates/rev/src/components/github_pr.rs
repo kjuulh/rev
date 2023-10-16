@@ -90,7 +90,7 @@ impl Component for GithubPr {
             }
             Action::SkipReview => self.schedule_fetch(),
             Action::GitHubPrs(action) => {
-                tracing::info!("received action: {:?}", action);
+                //tracing::info!("received action: {:?}", action);
                 match action {
                     GitHubPrAction::Normal => self.state = action,
                     GitHubPrAction::EnterProcessing => self.state = action,
@@ -191,12 +191,12 @@ impl Component for GithubPr {
             .direction(Direction::Vertical)
             .split(body[1]);
 
-        tracing::info!(
-            "len of right body: {}, status_checks {}, comments {}",
-            right_body.len(),
-            status_checks_list.is_some(),
-            comment_list.is_some()
-        );
+        //tracing::info!(
+        //    "len of right body: {}, status_checks {}, comments {}",
+        //    right_body.len(),
+        //    status_checks_list.is_some(),
+        //    comment_list.is_some()
+        //);
 
         let description = body[0];
         //let statusChecks = rightBody[1];

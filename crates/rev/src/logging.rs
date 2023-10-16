@@ -7,7 +7,7 @@ use tracing_subscriber::{
 };
 
 pub fn initialize_logging() -> anyhow::Result<()> {
-    let project = match ProjectDirs::from("com", "kjuulh", env!("CARGO_PKG_NAME")) {
+    let project = match ProjectDirs::from("io", "kjuulh", env!("CARGO_PKG_NAME")) {
         Some(p) => p.data_local_dir().to_path_buf(),
         None => PathBuf::from(".").join(".data"),
     };
@@ -60,7 +60,7 @@ pub fn initialize_panic_handler() -> anyhow::Result<()> {
             // prints human-panic message
             print_msg(file_path, &meta)
                 .expect("human-panic: printing error message to console failed");
-            eprintln!("{}", panic_hook.panic_report(panic_info)); // prints color-eyre stack trace to stderr
+            //eprintln!("{}", panic_hook.panic_report(panic_info)); // prints color-eyre stack trace to stderr
         }
         let msg = format!("{}", panic_info);
         tracing::error!("Error: {}", msg);
